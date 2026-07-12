@@ -154,4 +154,109 @@ function setupAreaCombo() {
     }
     if (e.key === "Escape") list.classList.remove("open");
   });
-  list.addEventListen
+  list.addEventListener("click", (e) => {
+    const item = e.target.closest(".combo-item");
+    if (item) selectArea(item.dataset.slug, item.textContent);
+  });
+  clearBtn.addEventListener("click", () => selectArea("", ""));
+  document.addEventListener("click", (e) => {
+    if (!document.getElementById("area-combo").contains(e.target)) list.classList.remove("open");
+  });
+}
+
+async function loadListings() {
+  const { data: listings, error } = await supabaseClient
+    .from("listings")
+    .select(`
+      id, business_name, description, years_experience, contact_phone, contact_whatsapp,
+      categories ( name, slug, icon ),
+      listing_areas ( areas ( name, slug ) )
+    `)
+    .eq("status", "active")
+    .order("business_name");
+
+  if (error) {
+    document.getElementById("results-meta").textContent = "Could not load listings. Please refresh.";
+    console.error(error);
+    return;
+  }
+
+  const { data: ratings } = await supabaseClient.from("listing_ratings").select("*");
+  const ratingMap = {};
+  (ratings || []).forEach(r => { ratingMap[r.listing_id] = r; });
+
+  allListings = (listings || []).map(l => ({
+    ...l,
+    areaSlugs: (l.listing_areas || []).map(la => la.areas?.slug).filter(Boolean),
+    areaNames: (l.listing_areas || []).map(la => la.areas?.name).filter(Boolean),
+    avg_rating: ratingMap[l.id]?.avg_rating || 0,
+    review_count: ratingMap[l.id]?.review_count || 0,
+  }));
+
+  render();
+}
+
+function areaTagsHtml(names) {
+  // Citywide providers: one clean tag instead of 16
+  if (names.length >= 10) return `<span class="area-tag">🏙️ All Karachi</span>`;
+  const shown = names.slice(0, 3).map(a => `<span class="area-tag">${escapeHtml(a)}</span>`).join("");
+  const extra = names.length > 3 ? `<span class="area-tag">+${names.length - 3} more</span>` : "";
+  return shown + extra;
+}
+
+function render() {
+  const grid = document.getElementById("listing-grid");
+  const meta = document.getElementById("results-meta");
+
+  let filtered = allListings;
+  if (activeArea) filtered = filtered.filter(l => l.areaSlugs.includes(activeArea));
+  if (activeCategory) filtered = filtered.filter(l => l.categories?.slug === activeCategory);
+  if (searchTerm) {
+    filtered = filtered.filter(l =>
+      (l.business_name || "").toLowerCase().includes(searchTerm) ||
+      (l.description || "").toLowerCase().includes(searchTerm) ||
+      (l.categories?.name || "").toLowerCase().includes(searchTerm)
+    );
+  }
+
+  // Rated providers first (by rating, then review count), unrated alphabetically after
+  filtered = [...filtered].sort((a, b) =>
+    (b.avg_rating - a.avg_rating) ||
+    (b.review_count - a.review_count) ||
+    a.business_name.localeCompare(b.business_name)
+  );
+
+  meta.textContent = `${filtered.length} service provider${filtered.length === 1 ? "" : "s"} found`;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="empty-state">No listings match these filters yet. Try a different area or category.</div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(l => `
+    <div class="card">
+      <span class="badge">${escapeHtml(l.categories?.icon || "")} ${escapeHtml(l.categories?.name || "")}</span>
+      <h3>${escapeHtml(l.business_name)}</h3>
+      <div class="rating-row">
+        <span class="stars">${starString(l.avg_rating)}</span>
+        <span class="rating-count">${l.avg_rating ? l.avg_rating.toFixed(1) : "No ratings yet"} ${l.review_count ? `(${l.review_count} review${l.review_count === 1 ? "" : "s"})` : ""}</span>
+      </div>
+      <p class="card-desc">${escapeHtml(l.description || "")}</p>
+      <div class="area-tags">${areaTagsHtml(l.areaNames)}</div>
+      <div class="card-footer">
+        <span class="meta-line">${l.years_experience ? l.years_experience + " yrs experience" : ""}</span>
+        <div class="card-actions">
+          ${l.contact_phone ? `<a class="btn secondary small" href="tel:${escapeHtml(l.contact_phone)}">📞 Call</a>` : ""}
+          ${l.contact_whatsapp ? `<a class="btn secondary small" href="https://wa.me/92${String(l.contact_whatsapp).replace(/[^0-9]/g, "").replace(/^0/, "")}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
+          <a class="btn small" href="listing.html?id=${l.id}">View profile</a>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+loadFilters();
+loadListings();
+</script>
+</body>
+</html>

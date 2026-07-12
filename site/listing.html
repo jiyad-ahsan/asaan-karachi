@@ -165,4 +165,28 @@ async function submitReview() {
     return;
   }
 
-  const 
+  const { error } = await supabaseClient.from("reviews").insert({
+    listing_id: listingId,
+    reviewer_name: name,
+    rating: currentRating,
+    comment: comment || null,
+  });
+
+  if (error) {
+    msgEl.innerHTML = `<div class="form-msg error">Could not submit review. Please try again.</div>`;
+    console.error(error);
+    return;
+  }
+
+  msgEl.innerHTML = `<div class="form-msg success">Thanks! Your review has been posted.</div>`;
+  nameEl.value = "";
+  commentEl.value = "";
+  currentRating = 0;
+  document.querySelectorAll("#star-picker span").forEach(s => s.classList.remove("selected"));
+  load();
+}
+
+load();
+</script>
+</body>
+</html>

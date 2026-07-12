@@ -402,4 +402,11 @@ async function deleteReview(id) {
   const { error } = await supabaseClient.from("reviews").delete().eq("id", id);
   if (error) { alert("Could not delete: " + error.message); return; }
   await loadAdminReviews();
-  rend
+  renderReviews();
+  renderDashboard();
+}
+
+init();
+</script>
+</body>
+</html>

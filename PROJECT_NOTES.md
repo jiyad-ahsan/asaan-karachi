@@ -28,6 +28,9 @@ Row-level security: public can read everything active; public can insert reviews
 
 The publishable (anon) key is embedded client-side in `site/config.js` — this is expected/safe, it only has the public read/insert permissions defined by RLS above.
 
+## Source control
+GitHub: https://github.com/jiyad-ahsan/asaan-karachi (private). The canonical working copy is this Desktop folder; Claude mirrors it to a temp git clone and pushes (OneDrive-synced folders can't host .git). Pushes require Jiyad's fine-grained PAT (90-day expiry, scoped to this repo, Contents R/W) — pasted per session, never stored in files. Once Netlify is linked to the repo (publish directory: `site`), every push auto-deploys.
+
 ## Site files
 `/site` — plain HTML/CSS/JS, no build step, no framework. Deploys as-is to any static host.
 - `index.html` — browse/filter page
@@ -51,6 +54,4 @@ Drag the `/site` folder onto https://app.netlify.com/drop, or drag it into the e
 
 ## Status as of 2026-07-12
 - 16 real Karachi providers inserted (all 5 categories), sample listings suspended. Contact details came from the providers' public websites — worth a quick phone spot-check before heavy marketing.
-- Site updates (need a Netlify redeploy of `/site` to go live): dark mode toggle (persists, follows system preference), search box, call/WhatsApp buttons on cards, rating-based sorting, SEO/OG meta tags, mobile tweaks, demo banner replaced with a public-sources disclaimer.
-- Admin panel core built (admin.html + auth + RLS policies). Needs the same Netlify redeploy to go live.
-- Next steps: redeploy site → change admin temp password → admin panel extras (flagging, claim requests, CSV export per Admin_Panel_Plan.md) → Phase 2 verified reviews.
+- Site updates (need a Netlify redeploy of `/site` to go live): dark mode toggle (persists, follows s

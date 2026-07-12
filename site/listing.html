@@ -54,6 +54,7 @@ async function load() {
     .from("listings")
     .select(`
       id, business_name, description, years_experience, contact_phone, contact_whatsapp,
+      google_rating, google_review_count,
       categories ( name, icon ),
       listing_areas ( areas ( name ) )
     `)
@@ -95,6 +96,7 @@ async function load() {
           <span class="rating-count">${avg ? avg.toFixed(1) : "No ratings yet"} ${count ? `(${count} review${count === 1 ? "" : "s"})` : ""}</span>
         </div>
       </div>
+      ${listing.google_rating ? `<p class="meta-line">Google rating: ★ ${listing.google_rating} (${listing.google_review_count} reviews)</p>` : ""}
       <p class="meta-line">${listing.years_experience ? listing.years_experience + " years experience" : ""}</p>
       <p>${escapeHtml(listing.description || "")}</p>
       <div class="area-tags">${areaNames.length >= 10

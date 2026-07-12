@@ -170,6 +170,7 @@ async function loadListings() {
     .from("listings")
     .select(`
       id, business_name, description, years_experience, contact_phone, contact_whatsapp,
+      google_rating, google_review_count,
       categories ( name, slug, icon ),
       listing_areas ( areas ( name, slug ) )
     `)
@@ -242,6 +243,7 @@ function render() {
         <span class="stars">${starString(l.avg_rating)}</span>
         <span class="rating-count">${l.avg_rating ? l.avg_rating.toFixed(1) : "No ratings yet"} ${l.review_count ? `(${l.review_count} review${l.review_count === 1 ? "" : "s"})` : ""}</span>
       </div>
+      ${l.google_rating ? `<div class="rating-row"><span class="rating-count">Google: ★ ${l.google_rating} (${l.google_review_count} reviews)</span></div>` : ""}
       <p class="card-desc">${escapeHtml(l.description || "")}</p>
       <div class="area-tags">${areaTagsHtml(l.areaNames)}</div>
       <div class="card-footer">

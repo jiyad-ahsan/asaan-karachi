@@ -103,6 +103,7 @@ function listingCard(l) {
         <span class="stars">${stars(l.avg_rating)}</span>
         <span class="rating-count">${l.avg_rating ? l.avg_rating.toFixed(1) : "No ratings yet"}${l.review_count ? ` (${l.review_count} review${l.review_count === 1 ? "" : "s"})` : ""}</span>
       </div>
+      ${l.google_rating ? `<div class="rating-row"><span class="rating-count">Google: ★ ${l.google_rating} (${l.google_review_count} reviews)</span></div>` : ""}
       <p class="card-desc">${esc(l.description || "")}</p>
       <div class="area-tags">${areaTags}</div>
       <div class="card-footer">
@@ -153,7 +154,7 @@ async function main() {
   [categories, areas, listings, ratings] = await Promise.all([
     supa("categories?select=id,name,slug,icon&order=name"),
     supa("areas?select=id,name,slug&order=name"),
-    supa("listings?select=id,business_name,description,years_experience,contact_phone,contact_whatsapp,categories(name,slug,icon),listing_areas(areas(name,slug))&status=eq.active&order=business_name"),
+    supa("listings?select=id,business_name,description,years_experience,contact_phone,contact_whatsapp,google_rating,google_review_count,categories(name,slug,icon),listing_areas(areas(name,slug))&status=eq.active&order=business_name"),
     supa("listing_ratings?select=*"),
   ]);
   }

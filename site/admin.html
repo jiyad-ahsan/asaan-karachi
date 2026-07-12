@@ -58,6 +58,9 @@
       <div id="missing-phone"></div>
       <h3 class="section-title">Latest reviews</h3>
       <div id="latest-reviews"></div>
+      <h3 class="section-title">Google ratings</h3>
+      <button class="btn" onclick="refreshGoogle()">Refresh Google ratings</button>
+      <div id="google-msg" class="form-msg"></div>
     </section>
 
     <!-- Listings -->
@@ -404,6 +407,20 @@ async function deleteReview(id) {
   await loadAdminReviews();
   renderReviews();
   renderDashboard();
+}
+
+async function refreshGoogle() {
+  const msgEl = document.getElementById("google-msg");
+  msgEl.textContent = "Refreshing from Google… this can take a minute.";
+  const { data, error } = await supabaseClient.functions.invoke("google-ratings-refresh");
+  if (error) {
+    msgEl.innerHTML = `<div class="form-msg error">${escapeHtml(error.message || String(error))}</div>`;
+    return;
+  }
+  msgEl.innerHTML = `<div class="form-msg success">Processed ${data.processed} listings.</div>` +
+    `<pre style="white-space:pre-wrap;font-size:0.8rem">${escapeHtml(JSON.stringify(data.results, null, 2))}</pre>`;
+  await loadAdminListings();
+  renderListings();
 }
 
 init();

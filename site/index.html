@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AsaanKarachi — Home Services in Karachi | Electricians, Plumbers, AC Repair</title>
+<meta name="description" content="AsaanKarachi: find electricians, plumbers, AC technicians, solar installers, generator techs and appliance repair pros across Karachi — DHA, Clifton, Gulshan, PECHS and more — with community reviews." />
+<meta property="og:title" content="AsaanKarachi — Home Services in Karachi" />
+<meta property="og:description" content="Electricians, plumbers, AC technicians, generator techs and appliance repair pros across Karachi — rated by your neighbors." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://asaankarachi.pk/" />
+<link rel="canonical" href="https://asaankarachi.pk/" />
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<script>
+// Set theme before first paint to avoid flash
+(function () {
+  var saved = localStorage.getItem("theme");
+  var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", saved || (prefersDark ? "dark" : "light"));
+})();
+</script>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="logo"><img class="logo-img" src="logo.svg" alt="" /> AsaanKarachi <span class="tag">Home Services Directory</span></div>
+    <div class="header-right">
+      <div class="header-sub">Serving areas across Karachi</div>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Find trusted home service pros in Karachi</h1>
+    <p>Browse verified electricians, plumbers, AC technicians, solar installers, generator techs, and appliance repair experts — filtered by your area, rated by your neighbors.</p>
+  </section>
+
+  <div class="search-bar">
+    <input type="search" id="search-input" placeholder="Search by name or service — e.g. AC repair, generator, plumber…" autocomplete="off" />
+  </div>
+
+  <div class="source-note">Listings are compiled from publicly available sources. Please confirm details directly with the provider before hiring — reviews and verification badges are community-driven.</div>
+
+  <div class="filters">
+    <div class="filter-row">
+      <span class="filter-label">Area</span>
+      <div class="area-combo" id="area-combo">
+        <input type="text" id="area-input" placeholder="All areas — type to search…" autocomplete="off" />
+        <button class="combo-clear" id="area-clear" style="display:none" aria-label="Clear area">✕</button>
+        <div class="combo-list" id="area-list"></div>
+      </div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Service category</span>
+      <div class="chip-group" id="category-chips"></div>
+    </div>
+  </div>
+
+  <div class="results-meta" id="results-meta">Loading listings…</div>
+  <div class="listing-grid" id="listing-grid"></div>
+</main>
+
+<footer class="site-footer">
+  AsaanKarachi — community-rated home services directory for Karachi. Listings compiled from public sources; verify details with providers directly.
+</footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let allListings = [];
+let activeArea = null;
+let activeCategory = null;
+let searchTerm = "";
+
+document.getElementById("search-input").addEventListener("input", (e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  render();
+});
+
+let areasData = [];
+
+async function loadFilters() {
+  const [{ data: areas }, { data: categories }] = await Promise.all([
+    supabaseClient.from("areas").select("id, name, slug").order("name"),
+    supabaseClient.from("categories").select("id, name, slug, icon").order("name"),
+  ]);
+
+  areasData = areas || [];
+  setupAreaCombo();
+
+  const catChips = document.getElementById("category-chips");
+  catChips.innerHTML = "";
+  const allCatChip = document.createElement("div");
+  allCatChip.className = "chip active";
+  allCatChip.textContent = "All categories";
+  allCatChip.onclick = () => { activeCategory = null; refreshChips(); render(); };
+  catChips.appendChild(allCatChip);
+  (categories || []).forEach(c => {
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.textContent = `${c.icon || ""} ${c.name}`.trim();
+    chip.onclick = () => { activeCategory = c.slug; refreshChips(); render(); };
+    chip.dataset.slug = c.slug;
+    catChips.appendChild(chip);
+  });
+}
+
+function refreshChips() {
+  document.querySelectorAll("#category-chips .chip").forEach(el => {
+    const isAll = !el.dataset.slug;
+    el.classList.toggle("active", isAll ? activeCategory === null : el.dataset.slug === activeCategory);
+  });
+}
+
+// --- Searchable area dropdown ---
+function setupAreaCombo() {
+  const input = document.getElementById("area-input");
+  const list = document.getElementById("area-list");
+  const clearBtn = document.getElementById("area-clear");
+
+  function renderList(filter) {
+    const q = (filter || "").toLowerCase();
+    const matches = areasData.filter(a => a.name.toLowerCase().includes(q));
+    let html = `<div class="combo-item all" data-slug="">All areas</div>`;
+    html += matches.map(a => `<div class="combo-item" data-slug="${a.slug}">${escapeHtml(a.name)}</div>`).join("");
+    if (!matches.length) html += `<div class="combo-empty">No areas match "${escapeHtml(filter)}"</div>`;
+    list.innerHTML = html;
+  }
+
+  function selectArea(slug, name) {
+    activeArea = slug || null;
+    input.value = slug ? name : "";
+    clearBtn.style.display = slug ? "block" : "none";
+    list.classList.remove("open");
+    render();
+  }
+
+  input.addEventListener("focus", () => { renderList(""); list.classList.add("open"); input.select(); });
+  input.addEventListener("input", () => {
+    renderList(input.value);
+    list.classList.add("open");
+    if (!input.value.trim() && activeArea) { activeArea = null; clearBtn.style.display = "none"; render(); }
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const first = list.querySelector(".combo-item:not(.all)") || list.querySelector(".combo-item");
+      if (first) selectArea(first.dataset.slug, first.textContent);
+      e.preventDefault();
+    }
+    if (e.key === "Escape") list.classList.remove("open");
+  });
+  list.addEventListen

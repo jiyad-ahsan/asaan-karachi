@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Service Provider Profile — AsaanKarachi</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<script>
+// Set theme before first paint to avoid flash
+(function () {
+  var saved = localStorage.getItem("theme");
+  var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", saved || (prefersDark ? "dark" : "light"));
+})();
+</script>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="index.html"><img class="logo-img" src="logo.svg" alt="" /> AsaanKarachi <span class="tag">Home Services Directory</span></a>
+    <div class="header-right">
+      <div class="header-sub">Serving areas across Karachi</div>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <a class="back-link" href="index.html">← Back to all listings</a>
+  <div id="content">Loading…</div>
+</main>
+
+<footer class="site-footer">
+  AsaanKarachi — community-rated home services directory for Karachi. Listings compiled from public sources; verify details with providers directly.
+</footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+const listingId = qs("id");
+let currentRating = 0;
+
+async function load() {
+  if (!listingId) {
+    document.getElementById("content").innerHTML = `<div class="empty-state">No listing specified.</div>`;
+    return;
+  }
+
+  const { data: listing, error } = await supabaseClient
+    .from("listings")
+    .select(`
+      id, business_name, description, years_experience, contact_phone, contact_whatsapp,
+      categories ( name, icon ),
+      listing_areas ( areas ( name ) )
+    `)
+    .eq("id", listingId)
+    .single();
+
+  if (error || !listing) {
+    document.getElementById("content").innerHTML = `<div class="empty-state">Listing not found.</div>`;
+    return;
+  }
+
+  const { data: ratings } = await supabaseClient
+    .from("listing_ratings")
+    .select("*")
+    .eq("listing_id", listingId)
+    .maybeSingle();
+
+  const { data: reviews } = await supabaseClient
+    .from("reviews")
+    .select("*")
+    .eq("listing_id", listingId)
+    .order("created_at", { ascending: false });
+
+  const areaNames = (listing.listing_areas || []).map(la => la.areas?.name).filter(Boolean);
+  const avg = ratings?.avg_rating || 0;
+  const count = ratings?.review_count || 0;
+
+  document.title = `${listing.business_name} — AsaanKarachi`;
+
+  document.getElementById("content").innerHTML = `
+    <div class="detail-card">
+      <div class="detail-header">
+        <div>
+          <span class="badge">${escapeHtml(listing.categories?.icon || "")} ${escapeHtml(listing.categories?.name || "")}</span>
+          <h1>${escapeHtml(listing.business_name)}</h1>
+        </div>
+        <div class="rating-row">
+          <span class="stars" style="font-size:1.2rem">${starString(avg)}</span>
+          <span class="rating-count">${avg ? avg.toFixed(1) : "No ratings yet"} ${count ? `(${count} review${count === 1 ? "" : "s"})` : ""}</span>
+        </div>
+      </div>
+      <p class="meta-line">${listing.years_experience ? listing.years_experience + " years experience" : ""}</p>
+      <p>${escapeHtml(listing.description || "")}</p>
+      <div class="area-tags">${areaNames.length >= 10
+        ? `<span class="area-tag">🏙️ Serves all of Karachi</span>`
+        : areaNames.map(a => `<span class="area-tag">${escapeHtml(a)}</span>`).join("")}</div>
+      <div class="contact-row">
+        ${listing.contact_phone ? `<a class="btn" href="tel:${listing.contact_phone}">Call ${escapeHtml(listing.contact_phone)}</a>` : ""}
+        ${listing.contact_whatsapp ? `<a class="btn secondary" href="https://wa.me/92${listing.contact_whatsapp.replace(/[^0-9]/g, "").replace(/^0/, "")}" target="_blank">WhatsApp</a>` : ""}
+      </div>
+    </div>
+
+    <h2 class="section-title">Community reviews (${count})</h2>
+    <div id="reviews-list">
+      ${(reviews || []).map(r => `
+        <div class="review-card">
+          <div class="review-head">
+            <div>
+              <span class="reviewer-name">${escapeHtml(r.reviewer_name)}</span>
+              ${r.is_verified ? `<span class="verified-badge"> ✓ Verified</span>` : ""}
+            </div>
+            <span class="review-date">${formatDate(r.created_at)}</span>
+          </div>
+          <div class="stars">${starString(r.rating)}</div>
+          ${r.comment ? `<div class="review-comment">${escapeHtml(r.comment)}</div>` : ""}
+        </div>
+      `).join("") || `<div class="empty-state">No reviews yet — be the first to leave one.</div>`}
+    </div>
+
+    <div class="review-form">
+      <h3 style="margin-top:0">Leave a review</h3>
+      <p class="form-note">Reviews are open (no verification required yet). A verified review system — via email/phone confirmation — is coming soon.</p>
+      <label>Your name</label>
+      <input type="text" id="reviewer-name" placeholder="e.g. Ayesha K." />
+      <label>Rating</label>
+      <div class="star-picker" id="star-picker">
+        ${[1,2,3,4,5].map(n => `<span data-value="${n}">★</span>`).join("")}
+      </div>
+      <label>Comment (optional)</label>
+      <textarea id="review-comment" rows="3" placeholder="Share your experience with this service provider..."></textarea>
+      <button class="btn" style="margin-top:14px" onclick="submitReview()">Submit review</button>
+      <div id="form-msg"></div>
+    </div>
+  `;
+
+  document.querySelectorAll("#star-picker span").forEach(star => {
+    star.addEventListener("click", () => {
+      currentRating = parseInt(star.dataset.value, 10);
+      document.querySelectorAll("#star-picker span").forEach(s => {
+        s.classList.toggle("selected", parseInt(s.dataset.value, 10) <= currentRating);
+      });
+    });
+  });
+}
+
+async function submitReview() {
+  const nameEl = document.getElementById("reviewer-name");
+  const commentEl = document.getElementById("review-comment");
+  const msgEl = document.getElementById("form-msg");
+
+  const name = nameEl.value.trim();
+  const comment = commentEl.value.trim();
+
+  if (!name) {
+    msgEl.innerHTML = `<div class="form-msg error">Please enter your name.</div>`;
+    return;
+  }
+  if (!currentRating) {
+    msgEl.innerHTML = `<div class="form-msg error">Please select a star rating.</div>`;
+    return;
+  }
+
+  const 

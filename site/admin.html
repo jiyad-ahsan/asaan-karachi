@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin — AsaanKarachi</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<script>
+(function () {
+  var saved = localStorage.getItem("theme");
+  var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", saved || (prefersDark ? "dark" : "light"));
+})();
+</script>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="index.html"><img class="logo-img" src="logo.svg" alt="" /> AsaanKarachi <span class="tag">Admin</span></a>
+    <div class="header-right">
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+      <button class="theme-toggle" id="signout-btn" style="display:none" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- Login -->
+  <div id="login-view" style="display:none">
+    <div class="login-box">
+      <h2 style="margin-top:0">Admin login</h2>
+      <label>Email</label>
+      <input type="email" id="login-email" autocomplete="username" />
+      <label>Password</label>
+      <input type="password" id="login-password" autocomplete="current-password" />
+      <button class="btn" style="width:100%" onclick="signIn()">Sign in</button>
+      <div id="login-msg" class="form-msg"></div>
+    </div>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel-view" style="display:none">
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
+      <button class="admin-tab" data-tab="listings" onclick="showTab('listings')">Listings</button>
+      <button class="admin-tab" data-tab="reviews" onclick="showTab('reviews')">Reviews</button>
+      <button class="admin-tab" data-tab="account" onclick="showTab('account')">Account</button>
+    </div>
+
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="admin-section active">
+      <div class="stat-grid" id="stat-grid"></div>
+      <h3 class="section-title">Listings missing a phone number</h3>
+      <div id="missing-phone"></div>
+      <h3 class="section-title">Latest reviews</h3>
+      <div id="latest-reviews"></div>
+    </section>
+
+    <!-- Listings -->
+    <section id="tab-listings" class="admin-section">
+      <div class="admin-toolbar">
+        <input type="search" id="listing-search" placeholder="Search listings…" oninput="renderListings()" />
+        <select id="listing-status-filter" onchange="renderListings()">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="pending">Pending</option>
+          <option value="suspended">Suspended</option>
+        </select>
+        <button class="btn" onclick="openEditor(null)">+ New listing</button>
+      </div>
+      <div id="listing-editor"></div>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Name</th><th>Category</th><th>Phone</th><th>Areas</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="listings-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Reviews -->
+    <section id="tab-reviews" class="admin-section">
+      <div class="admin-toolbar">
+        <select id="review-rating-filter" onchange="renderReviews()">
+          <option value="">All ratings</option>
+          <option value="1">★ 1</option><option value="2">★ 2</option><option value="3">★ 3</option>
+          <option value="4">★ 4</option><option value="5">★ 5</option>
+        </select>
+        <select id="review-verified-filter" onchange="renderReviews()">
+          <option value="">Verified + unverified</option>
+          <option value="yes">Verified only</option>
+          <option value="no">Unverified only</option>
+        </select>
+      </div>
+      <div id="reviews-admin-list"></div>
+    </section>
+
+    <!-- Account -->
+    <section id="tab-account" class="admin-section">
+      <div class="login-box" style="margin:20px 0">
+        <h3 style="margin-top:0">Change password</h3>
+        <label>New password (min 8 characters)</label>
+        <input type="password" id="new-password" autocomplete="new-password" />
+        <button class="btn" onclick="changePassword()">Update password</button>
+        <div id="account-msg" class="form-msg"></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let allAdminListings = [];
+let allAdminReviews = [];
+let categoriesCache = [];
+let areasCache = [];
+
+// ---------- Auth ----------
+async function init() {
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) { showLogin(); return; }
+  const { data: adminRow } = await supabaseClient.from("admin_users").select("user_id").maybeSingle();
+  if (!adminRow) {
+    await supabaseClient.auth.signOut();
+    showLogin("This account does not have admin access.");
+    return;
+  }
+  showPanel();
+}
+
+function showLogin(msg) {
+  document.getElementById("login-view").style.display = "block";
+  document.getElementById("panel-view").style.display = "none";
+  document.getElementById("signout-btn").style.display = "none";
+  if (msg) document.getElementById("login-msg").innerHTML = `<div class="form-msg error">${escapeHtml(msg)}</div>`;
+}
+
+async function showPanel() {
+  document.getElementById("login-view").style.display = "none";
+  document.getElementById("panel-view").style.display = "block";
+  document.getElementById("signout-btn").style.display = "inline-block";
+  await Promise.all([loadMeta(), loadAdminListings(), loadAdminReviews()]);
+  renderDashboard();
+  renderListings();
+  renderReviews();
+}
+
+async function signIn() {
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+  const msgEl = document.getElementById("login-msg");
+  msgEl.textContent = "";
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    msgEl.innerHTML = `<div class="form-msg error">Sign-in failed: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  init();
+}
+
+async function signOut() {
+  await supabaseClient.auth.signOut();
+  location.reload();
+}
+
+async function changePassword() {
+  const pw = document.getElementById("new-password").value;
+  const msgEl = document.getElementById("account-msg");
+  if (pw.length < 8) { msgEl.innerHTML = `<div class="form-msg error">Password must be at least 8 characters.</div>`; return; }
+  const { error } = await supabaseClient.auth.updateUser({ password: pw });
+  msgEl.innerHTML = error
+    ? `<div class="form-msg error">${escapeHtml(error.message)}</div>`
+    : `<div class="form-msg success">Password updated.</div>`;
+  if (!error) document.getElementById("new-password").value = "";
+}
+
+// ---------- Data ----------
+async function loadMeta() {
+  const [{ data: cats }, { data: areas }] = await Promise.all([
+    supabaseClient.from("categories").select("id, name").order("name"),
+    supabaseClient.from("areas").select("id, name").order("name"),
+  ]);
+  categoriesCache = cats || [];
+  areasCache = areas || [];
+}
+
+async function loadAdminListings() {
+  const { data, error } = await supabaseClient
+    .from("listings")
+    .select(`id, business_name, category_id, contact_phone, contact_whatsapp, description, years_experience, is_sample, status, created_at,
+      categories ( name ), listing_areas ( area_id, areas ( name ) )`)
+    .order("business_name");
+  if (error) { console.error(error); return; }
+  allAdminListings = data || [];
+}
+
+async function loadAdminReviews() {
+  const { data, error } = await supabaseClient
+    .from("reviews")
+    .select("id, listing_id, reviewer_name, rating, comment, is_verified, created_at, listings ( business_name )")
+    .order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  allAdminReviews = data || [];
+}
+
+// ---------- Tabs ----------
+function showTab(name) {
+  document.querySelectorAll(".admin-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+  document.querySelectorAll(".admin-section").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
+}
+
+// ---------- Dashboard ----------
+function renderDashboard() {
+  const active = allAdminListings.filter(l => l.status === "active").length;
+  const suspended = allAdminListings.filter(l => l.status === "suspended").length;
+  const weekAgo = Date.now() - 7 * 86400000;
+  const recentReviews = allAdminReviews.filter(r => new Date(r.created_at).getTime() > weekAgo).length;
+
+  document.getElementById("stat-grid").innerHTML = `
+    <div class="stat-card"><div class="num">${active}</div><div class="lbl">Active listings</div></div>
+    <div class="stat-card"><div class="num">${suspended}</div><div class="lbl">Suspended</div></div>
+    <div class="stat-card"><div class="num">${allAdminReviews.length}</div><div class="lbl">Total reviews</div></div>
+    <div class="stat-card"><div class="num">${recentReviews}</div><div class="lbl">Reviews this week</div></div>
+  `;
+
+  const missing = allAdminListings.filter(l => !l.contact_phone && l.status === "active");
+  document.getElementById("missing-phone").innerHTML = missing.length
+    ? missing.map(l => `<div class="review-card">${escapeHtml(l.business_name)} <span class="rating-count">(${escapeHtml(l.categories?.name || "")})</span></div>`).join("")
+    : `<div class="empty-state" style="padding:14px">All active listings have a phone number. 🎉</div>`;
+
+  document.getElementById("latest-reviews").innerHTML = allAdminReviews.slice(0, 10).map(reviewCardHtml).join("")
+    || `<div class="empty-state" style="padding:14px">No reviews yet.</div>`;
+}
+
+// ---------- Listings ----------
+function renderListings() {
+  const q = (document.getElementById("listing-search").value || "").toLowerCase();
+  const status = document.getElementById("listing-status-filter").value;
+  let rows = allAdminListings;
+  if (status) rows = rows.filter(l => l.status === status);
+  if (q) rows = rows.filter(l =>
+    (l.business_name || "").toLowerCase().includes(q) ||
+    (l.description || "").toLowerCase().includes(q) ||
+    (l.categories?.name || "").toLowerCase().includes(q));
+
+  document.getElementById("listings-tbody").innerHTML = rows.map(l => `
+    <tr>
+      <td><strong>${escapeHtml(l.business_name)}</strong>${l.is_sample ? ' <span class="status-pill suspended">sample</span>' : ""}</td>
+      <td>${escapeHtml(l.categories?.name || "")}</td>
+      <td>${escapeHtml(l.contact_phone || "—")}</td>
+      <td>${(l.listing_areas || []).map(la => escapeHtml(la.areas?.name || "")).join(", ")}</td>
+      <td><span class="status-pill ${l.status === "active" ? "active" : "suspended"}">${l.status}</span></td>
+      <td>
+        <button class="btn small secondary" onclick="openEditor('${l.id}')">Edit</button>
+        ${l.status === "active"
+          ? `<button class="btn small secondary" onclick="setStatus('${l.id}','suspended')">Suspend</button>`
+          : `<button class="btn small secondary" onclick="setStatus('${l.id}','active')">Activate</button>`}
+        <button class="btn small danger" onclick="deleteListing('${l.id}', '${escapeHtml(l.business_name).replace(/'/g, "\\'")}')">Delete</button>
+      </td>
+    </tr>
+  `).join("") || `<tr><td colspan="6" class="empty-state">No listings match.</td></tr>`;
+}
+
+function openEditor(id) {
+  const l = id ? allAdminListings.find(x => x.id === id) : null;
+  const selectedAreas = new Set((l?.listing_areas || []).map(la => la.area_id));
+  document.getElementById("listing-editor").innerHTML = `
+    <div class="edit-panel">
+      <h3 style="margin-top:0">${l ? "Edit listing" : "New listing"}</h3>
+      <label>Business name</label>
+      <input type="text" id="ed-name" value="${escapeHtml(l?.business_name || "")}" />
+      <label>Category</label>
+      <select id="ed-category">
+        ${categoriesCache.map(c => `<option value="${c.id}" ${l?.category_id === c.id ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("")}
+      </select>
+      <label>Phone (display format, e.g. 0307-111-6698)</label>
+      <input type="text" id="ed-phone" value="${escapeHtml(l?.contact_phone || "")}" />
+      <label>WhatsApp (digits only, e.g. 03071116698)</label>
+      <input type="text" id="ed-whatsapp" value="${escapeHtml(l?.contact_whatsapp || "")}" />
+      <label>Description</label>
+      <textarea id="ed-desc" rows="3">${escapeHtml(l?.description || "")}</textarea>
+      <label>Years experience (optional)</label>
+      <input type="number" id="ed-years" value="${l?.years_experience ?? ""}" />
+      <label>Service areas</label>
+      <div class="checkbox-row">
+        ${areasCache.map(a => `<label><input type="checkbox" class="ed-area" value="${a.id}" ${selectedAreas.has(a.id) ? "checked" : ""}/> ${escapeHtml(a.name)}</label>`).join("")}
+      </div>
+      <div style="margin-top:16px; display:flex; gap:10px">
+        <button class="btn" onclick="saveListing(${l ? `'${l.id}'` : "null"})">Save</button>
+        <button class="btn secondary" onclick="document.getElementById('listing-editor').innerHTML=''">Cancel</button>
+      </div>
+      <div id="editor-msg" class="form-msg"></div>
+    </div>
+  `;
+  document.getElementById("listing-editor").scrollIntoView({ behavior: "smooth" });
+}
+
+async function saveListing(id) {
+  const msgEl = document.getElementById("editor-msg");
+  const name = document.getElementById("ed-name").value.trim();
+  if (!name) { msgEl.innerHTML = `<div class="form-msg error">Business name is required.</div>`; return; }
+  const fields = {
+    business_name: name,
+    category_id: document.getElementById("ed-category").value,
+    contact_phone: document.getElementById("ed-phone").value.trim() || null,
+    contact_whatsapp: document.getElementById("ed-whatsapp").value.trim() || null,
+    description: document.getElementById("ed-desc").value.trim() || null,
+    years_experience: parseInt(document.getElementById("ed-years").value, 10) || null,
+  };
+  const areaIds = [...document.querySelectorAll(".ed-area:checked")].map(cb => cb.value);
+
+  let listingId = id;
+  if (id) {
+    const { error } = await supabaseClient.from("listings").update(fields).eq("id", id);
+    if (error) { msgEl.innerHTML = `<div class="form-msg error">${escapeHtml(error.message)}</div>`; return; }
+  } else {
+    const { data, error } = await supabaseClient.from("listings")
+      .insert({ ...fields, is_sample: false, status: "active" }).select("id").single();
+    if (error) { msgEl.innerHTML = `<div class="form-msg error">${escapeHtml(error.message)}</div>`; return; }
+    listingId = data.id;
+  }
+
+  await supabaseClient.from("listing_areas").delete().eq("listing_id", listingId);
+  if (areaIds.length) {
+    const { error: areaErr } = await supabaseClient.from("listing_areas")
+      .insert(areaIds.map(area_id => ({ listing_id: listingId, area_id })));
+    if (areaErr) { msgEl.innerHTML = `<div class="form-msg error">${escapeHtml(areaErr.message)}</div>`; return; }
+  }
+
+  document.getElementById("listing-editor").innerHTML = "";
+  await loadAdminListings();
+  renderListings();
+  renderDashboard();
+}
+
+async function setStatus(id, status) {
+  const { error } = await supabaseClient.from("listings").update({ status }).eq("id", id);
+  if (error) { alert("Could not update: " + error.message); return; }
+  await loadAdminListings();
+  renderListings();
+  renderDashboard();
+}
+
+async function deleteListing(id, name) {
+  if (!confirm(`Permanently delete "${name}" and all its reviews? This cannot be undone.`)) return;
+  await supabaseClient.from("reviews").delete().eq("listing_id", id);
+  await supabaseClient.from("listing_areas").delete().eq("listing_id", id);
+  const { error } = await supabaseClient.from("listings").delete().eq("id", id);
+  if (error) { alert("Could not delete: " + error.message); return; }
+  await Promise.all([loadAdminListings(), loadAdminReviews()]);
+  renderListings();
+  renderReviews();
+  renderDashboard();
+}
+
+// ---------- Reviews ----------
+function reviewCardHtml(r) {
+  return `
+    <div class="review-card">
+      <div class="review-head">
+        <div>
+          <span class="reviewer-name">${escapeHtml(r.reviewer_name)}</span>
+          <span class="rating-count"> on ${escapeHtml(r.listings?.business_name || "unknown listing")}</span>
+          ${r.is_verified ? `<span class="verified-badge"> ✓ Verified</span>` : ""}
+        </div>
+        <span class="review-date">${formatDate(r.created_at)}</span>
+      </div>
+      <div class="stars">${starString(r.rating)}</div>
+      ${r.comment ? `<div class="review-comment">${escapeHtml(r.comment)}</div>` : ""}
+      <div style="margin-top:10px; display:flex; gap:8px">
+        <button class="btn small secondary" onclick="toggleVerified('${r.id}', ${!r.is_verified})">${r.is_verified ? "Unverify" : "Mark verified"}</button>
+        <button class="btn small danger" onclick="deleteReview('${r.id}')">Delete</button>
+      </div>
+    </div>`;
+}
+
+function renderReviews() {
+  const rating = document.getElementById("review-rating-filter").value;
+  const verified = document.getElementById("review-verified-filter").value;
+  let rows = allAdminReviews;
+  if (rating) rows = rows.filter(r => r.rating === parseInt(rating, 10));
+  if (verified === "yes") rows = rows.filter(r => r.is_verified);
+  if (verified === "no") rows = rows.filter(r => !r.is_verified);
+  document.getElementById("reviews-admin-list").innerHTML =
+    rows.map(reviewCardHtml).join("") || `<div class="empty-state">No reviews match.</div>`;
+}
+
+async function toggleVerified(id, value) {
+  const { error } = await supabaseClient.from("reviews").update({ is_verified: value }).eq("id", id);
+  if (error) { alert("Could not update: " + error.message); return; }
+  await loadAdminReviews();
+  renderReviews();
+  renderDashboard();
+}
+
+async function deleteReview(id) {
+  if (!confirm("Delete this review permanently?")) return;
+  const { error } = await supabaseClient.from("reviews").delete().eq("id", id);
+  if (error) { alert("Could not delete: " + error.message); return; }
+  await loadAdminReviews();
+  rend

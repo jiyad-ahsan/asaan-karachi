@@ -1,0 +1,4 @@
+# Generated at build time by generate.js — do not commit
+site/*/
+site/sitemap.xml
+site/robots.txt

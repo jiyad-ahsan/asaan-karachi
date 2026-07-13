@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>List Your Business Free — AsaanKarachi</title>
+<meta name="description" content="Get your home services business listed free on AsaanKarachi — Karachi's community-rated directory. Electricians, plumbers, AC, solar, generator and appliance repair." />
+<link rel="canonical" href="https://asaankarachi.pk/get-listed.html" />
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<script>
+(function () {
+  var saved = localStorage.getItem("theme");
+  var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", saved || (prefersDark ? "dark" : "light"));
+})();
+</script>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="index.html"><img class="logo-img" src="logo.svg" alt="" /> AsaanKarachi <span class="tag">Home Services Directory</span></a>
+    <div class="header-right">
+      <div class="header-sub">Serving areas across Karachi</div>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <a class="back-link" href="index.html">← Back to all listings</a>
+
+  <section class="hero" style="text-align:left;padding:10px 0 4px">
+    <h1>List your business on AsaanKarachi — free</h1>
+    <p style="margin:8px 0 0;max-width:720px">Reach customers across Karachi searching for your service. Fill this out and we'll review and publish your listing within a few days.</p>
+  </section>
+
+  <div class="review-form" style="max-width:720px">
+    <label>Business name *</label>
+    <input type="text" id="f-name" placeholder="e.g. Ahmed Electric Works" />
+
+    <label>Service category *</label>
+    <select id="f-category" style="width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;background:var(--surface-2);color:var(--ink)"></select>
+
+    <label>Phone number (for customer calls) *</label>
+    <input type="text" id="f-phone" placeholder="e.g. 0300-1234567" />
+
+    <label>WhatsApp number (digits only — leave blank if same as phone)</label>
+    <input type="text" id="f-whatsapp" placeholder="e.g. 03001234567" />
+
+    <label>Which areas do you serve? *</label>
+    <div class="checkbox-row" id="f-areas" style="margin-bottom:4px"></div>
+
+    <label>Describe your services *</label>
+    <textarea id="f-desc" rows="4" placeholder="What do you do? What makes you reliable? 2–4 sentences."></textarea>
+
+    <label>Years of experience (optional)</label>
+    <input type="number" id="f-years" min="0" max="60" />
+
+    <label>Your name (owner / contact person) *</label>
+    <input type="text" id="f-owner" placeholder="e.g. Muhammad Ahmed" />
+
+    <label>Email or alternate contact (optional)</label>
+    <input type="text" id="f-contact" />
+
+    <label>Website or Facebook page (optional)</label>
+    <input type="text" id="f-website" />
+
+    <label style="display:flex;align-items:flex-start;gap:8px;margin-top:16px;color:var(--ink);font-size:0.86rem">
+      <input type="checkbox" id="f-consent" style="width:auto;margin-top:3px" />
+      <span>I confirm this information is accurate and agree to have my business listed publicly on AsaanKarachi. *</span>
+    </label>
+
+    <button class="btn" style="margin-top:18px" onclick="submitBusiness()">Submit for review</button>
+    <div id="form-msg"></div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  AsaanKarachi — community-rated home services directory for Karachi. Listings compiled from public sources; verify details with providers directly.
+  · <a href="/browse/" style="color:inherit;text-decoration:underline">Browse all services by area</a>
+</footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+async function loadFormMeta() {
+  const [{ data: categories }, { data: areas }] = await Promise.all([
+    supabaseClient.from("categories").select("id, name").order("name"),
+    supabaseClient.from("areas").select("id, name").order("name"),
+  ]);
+
+  const catSel = document.getElementById("f-category");
+  catSel.innerHTML = `<option value="">Select a category…</option>` +
+    (categories || []).map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+
+  const areaBox = document.getElementById("f-areas");
+  areaBox.innerHTML =
+    `<label><input type="checkbox" id="f-all-karachi" style="width:auto" /> <strong>All of Karachi</strong></label>` +
+    (areas || []).map(a => `<label><input type="checkbox" class="f-area" value="${a.id}" style="width:auto" /> ${escapeHtml(a.name)}</label>`).join("");
+
+  document.getElementById("f-all-karachi").addEventListener("change", (e) => {
+    document.querySelectorAll(".f-area").forEach(cb => { cb.checked = e.target.checked; });
+  });
+}
+
+async function submitBusiness() {
+  const msgEl = document.getElementById("form-msg");
+  const err = (m) => { msgEl.innerHTML = `<div class="form-msg error">${escapeHtml(m)}</div>`; };
+
+  const name = document.getElementById("f-name").value.trim();
+  const categoryId = document.getElementById("f-category").value;
+  const phone = document.getElementById("f-phone").value.trim();
+  const desc = document.getElementById("f-desc").value.trim();
+  const owner = document.getElementById("f-owner").value.trim();
+  const areaIds = [...document.querySelectorAll(".f-area:checked")].map(cb => cb.value);
+
+  if (!name) return err("Please enter your business name.");
+  if (!categoryId) return err("Please select a service category.");
+  if (!phone) return err("Please enter a phone number.");
+  if (!areaIds.length) return err("Please select at least one service area.");
+  if (!desc) return err("Please describe your services.");
+  if (!owner) return err("Please enter your name.");
+  if (!document.getElementById("f-consent").checked) return err("Please confirm the information is accurate (checkbox).");
+
+  const { error } = await supabaseClient.from("listing_submissions").insert({
+    business_name: name,
+    category_id: categoryId,
+    contact_phone: phone,
+    contact_whatsapp: document.getElementById("f-whatsapp").value.trim() || null,
+    description: desc,
+    years_experience: parseInt(document.getElementById("f-years").value, 10) || null,
+    area_ids: areaIds,
+    owner_name: owner,
+    owner_contact: document.getElementById("f-contact").value.trim() || null,
+    website: document.getElementById("f-website").value.trim() || null,
+  });
+
+  if (error) {
+    console.error(error);
+    return err("Could not submit — please try again in a moment.");
+  }
+
+  msgEl.innerHTML = `<div class="form-msg success">Thanks! Your business has been submitted for review. We'll publish it within a few days.</div>`;
+  ["f-name","f-phone","f-whatsapp","f-desc","f-years","f-owner","f-contact","f-website"].forEach(id => document.getElementById(id).value = "");
+  document.getElementById("f-category").value = "";
+  document.getElementById("f-consent").checked = false;
+  document.querySelectorAll(".f-area, #f-all-karachi").forEach(cb => cb.checked = false);
+}
+
+loadFormMeta();
+</script>
+</body>
+</html>

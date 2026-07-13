@@ -48,6 +48,7 @@
       <button class="admin-tab active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
       <button class="admin-tab" data-tab="listings" onclick="showTab('listings')">Listings</button>
       <button class="admin-tab" data-tab="reviews" onclick="showTab('reviews')">Reviews</button>
+      <button class="admin-tab" data-tab="submissions" onclick="showTab('submissions')">Submissions</button>
       <button class="admin-tab" data-tab="account" onclick="showTab('account')">Account</button>
     </div>
 
@@ -101,6 +102,11 @@
       <div id="reviews-admin-list"></div>
     </section>
 
+    <!-- Submissions -->
+    <section id="tab-submissions" class="admin-section">
+      <div id="submissions-list"></div>
+    </section>
+
     <!-- Account -->
     <section id="tab-account" class="admin-section">
       <div class="login-box" style="margin:20px 0">
@@ -119,6 +125,7 @@
 <script>
 let allAdminListings = [];
 let allAdminReviews = [];
+let allSubmissions = [];
 let categoriesCache = [];
 let areasCache = [];
 
@@ -146,10 +153,11 @@ async function showPanel() {
   document.getElementById("login-view").style.display = "none";
   document.getElementById("panel-view").style.display = "block";
   document.getElementById("signout-btn").style.display = "inline-block";
-  await Promise.all([loadMeta(), loadAdminListings(), loadAdminReviews()]);
+  await Promise.all([loadMeta(), loadAdminListings(), loadAdminReviews(), loadSubmissions()]);
   renderDashboard();
   renderListings();
   renderReviews();
+  renderSubmissions();
 }
 
 async function signIn() {
@@ -210,6 +218,15 @@ async function loadAdminReviews() {
   allAdminReviews = data || [];
 }
 
+async function loadSubmissions() {
+  const { data, error } = await supabaseClient
+    .from("listing_submissions")
+    .select("*, categories ( name )")
+    .order("created_at", { ascending: false });
+  if (error) { console.error(error); return; }
+  allSubmissions = data || [];
+}
+
 // ---------- Tabs ----------
 function showTab(name) {
   document.querySelectorAll(".admin-tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
@@ -228,6 +245,7 @@ function renderDashboard() {
     <div class="stat-card"><div class="num">${suspended}</div><div class="lbl">Suspended</div></div>
     <div class="stat-card"><div class="num">${allAdminReviews.length}</div><div class="lbl">Total reviews</div></div>
     <div class="stat-card"><div class="num">${recentReviews}</div><div class="lbl">Reviews this week</div></div>
+    <div class="stat-card"><div class="num">${allSubmissions.filter(s => s.status === "pending").length}</div><div class="lbl">Pending submissions</div></div>
   `;
 
   const missing = allAdminListings.filter(l => !l.contact_phone && l.status === "active");
@@ -358,6 +376,70 @@ async function deleteListing(id, name) {
   renderListings();
   renderReviews();
   renderDashboard();
+}
+
+// ---------- Submissions ----------
+function renderSubmissions() {
+  const areaName = {};
+  areasCache.forEach(a => { areaName[a.id] = a.name; });
+  document.getElementById("submissions-list").innerHTML = allSubmissions.map(s => `
+    <div class="review-card">
+      <div class="review-head">
+        <div>
+          <span class="reviewer-name">${escapeHtml(s.business_name)}</span>
+          <span class="rating-count"> · ${escapeHtml(s.categories?.name || "")}</span>
+          <span class="status-pill ${s.status === "pending" ? "suspended" : "active"}" style="margin-left:6px">${s.status}</span>
+        </div>
+        <span class="review-date">${formatDate(s.created_at)}</span>
+      </div>
+      <div class="review-comment">
+        ${escapeHtml(s.description || "")}<br/>
+        <span class="rating-count">
+          📞 ${escapeHtml(s.contact_phone || "—")} · WhatsApp: ${escapeHtml(s.contact_whatsapp || "—")} · ${s.years_experience ? s.years_experience + " yrs" : "experience n/a"}<br/>
+          Areas: ${escapeHtml((s.area_ids || []).map(id => areaName[id] || "?").join(", ") || "—")}<br/>
+          Owner: ${escapeHtml(s.owner_name)}${s.owner_contact ? " · " + escapeHtml(s.owner_contact) : ""}${s.website ? " · " + escapeHtml(s.website) : ""}
+        </span>
+      </div>
+      ${s.status === "pending" ? `
+      <div style="margin-top:10px; display:flex; gap:8px">
+        <button class="btn small" onclick="approveSubmission('${s.id}')">Approve & publish</button>
+        <button class="btn small danger" onclick="rejectSubmission('${s.id}')">Reject</button>
+      </div>` : ""}
+    </div>
+  `).join("") || `<div class="empty-state">No submissions yet. Share the form: asaankarachi.pk/get-listed.html</div>`;
+}
+
+async function approveSubmission(id) {
+  const s = allSubmissions.find(x => x.id === id);
+  if (!s) return;
+  const desc = s.website ? `${s.description || ""} ${s.website}`.trim() : (s.description || null);
+  const { data: newListing, error } = await supabaseClient.from("listings").insert({
+    business_name: s.business_name,
+    category_id: s.category_id,
+    contact_phone: s.contact_phone,
+    contact_whatsapp: s.contact_whatsapp,
+    description: desc,
+    years_experience: s.years_experience,
+    is_sample: false,
+    status: "active",
+  }).select("id").single();
+  if (error) { alert("Could not create listing: " + error.message); return; }
+  if ((s.area_ids || []).length) {
+    const { error: areaErr } = await supabaseClient.from("listing_areas")
+      .insert(s.area_ids.map(area_id => ({ listing_id: newListing.id, area_id })));
+    if (areaErr) { alert("Listing created but areas failed: " + areaErr.message); }
+  }
+  await supabaseClient.from("listing_submissions").update({ status: "approved" }).eq("id", id);
+  await Promise.all([loadAdminListings(), loadSubmissions()]);
+  renderListings(); renderSubmissions(); renderDashboard();
+}
+
+async function rejectSubmission(id) {
+  if (!confirm("Reject this submission?")) return;
+  const { error } = await supabaseClient.from("listing_submissions").update({ status: "rejected" }).eq("id", id);
+  if (error) { alert("Could not reject: " + error.message); return; }
+  await loadSubmissions();
+  renderSubmissions(); renderDashboard();
 }
 
 // ---------- Reviews ----------

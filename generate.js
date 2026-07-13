@@ -11,7 +11,7 @@ const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const BASE_URL = "https://asaankarachi.pk";
 const SITE_DIR = path.join(__dirname, "site");
 // Swap this for the Google Form / native submission URL when ready:
-const GET_LISTED_URL = "mailto:jiyad.ahsan29@gmail.com?subject=List%20my%20business%20on%20AsaanKarachi";
+const GET_LISTED_URL = "/get-listed.html";
 
 const PLURALS = {
   "electrician": "Electricians",
@@ -81,6 +81,7 @@ ${body}
 <footer class="site-footer">
   AsaanKarachi — community-rated home services directory for Karachi. Listings compiled from public sources; verify details with providers directly.
   · <a href="/browse/" style="color:inherit;text-decoration:underline">Browse all services by area</a>
+  · <a href="/get-listed.html" style="color:inherit;text-decoration:underline">List your business</a>
 </footer>
 
 </body>

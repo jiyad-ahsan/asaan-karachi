@@ -169,7 +169,10 @@ async function main() {
   }
   for (const c of categories) c.plural = PLURALS[c.slug] || c.name + "s";
 
+  const contactTier = l => (l.contact_phone || l.contact_whatsapp) ? 2
+    : (/\b[a-z0-9-]+\.(com|pk|org|net)\b/i.test(l.description || "") ? 1 : 0);
   const sortListings = arr => [...arr].sort((a, b) =>
+    (contactTier(b) - contactTier(a)) ||
     (b.avg_rating - a.avg_rating) || (b.review_count - a.review_count) || a.business_name.localeCompare(b.business_name));
 
   const sitemapUrls = [`${BASE_URL}/`, `${BASE_URL}/browse/`];

@@ -38,6 +38,7 @@
   <section class="hero">
     <h1>Find trusted home service pros in Karachi</h1>
     <p>Browse verified electricians, plumbers, AC technicians, solar installers, generator techs, and appliance repair experts — filtered by your area, rated by your neighbors.</p>
+    <a class="btn" href="/get-listed.html" style="margin-top:16px;display:inline-block">List your business — free</a>
   </section>
 
   <div class="search-bar">
@@ -222,8 +223,11 @@ function render() {
     );
   }
 
-  // Rated providers first (by rating, then review count), unrated alphabetically after
+  // Contactable providers first (phone/WhatsApp > website-only > none), then rating, then review count
+  const contactTier = l => (l.contact_phone || l.contact_whatsapp) ? 2
+    : (/\b[a-z0-9-]+\.(com|pk|org|net)\b/i.test(l.description || "") ? 1 : 0);
   filtered = [...filtered].sort((a, b) =>
+    (contactTier(b) - contactTier(a)) ||
     (b.avg_rating - a.avg_rating) ||
     (b.review_count - a.review_count) ||
     a.business_name.localeCompare(b.business_name)

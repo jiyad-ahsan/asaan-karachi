@@ -70,6 +70,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script
     <a class="logo" href="/"><img class="logo-img" src="/logo.svg" alt="" /> AsaanKarachi <span class="tag">Home Services Directory</span></a>
     <div class="header-right">
       <div class="header-sub">Serving areas across Karachi</div>
+      <a class="header-link" href="/directory.html">Full directory</a>
     </div>
   </div>
 </header>
@@ -175,7 +176,7 @@ async function main() {
     (contactTier(b) - contactTier(a)) ||
     (b.avg_rating - a.avg_rating) || (b.review_count - a.review_count) || a.business_name.localeCompare(b.business_name));
 
-  const sitemapUrls = [`${BASE_URL}/`, `${BASE_URL}/browse/`];
+  const sitemapUrls = [`${BASE_URL}/`, `${BASE_URL}/directory.html`, `${BASE_URL}/get-listed.html`, `${BASE_URL}/browse/`];
   let pageCount = 0;
 
   // --- Category × Area pages ---

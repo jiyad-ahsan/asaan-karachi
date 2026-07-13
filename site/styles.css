@@ -410,3 +410,27 @@ table.admin-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; 
   .detail-card { padding: 18px; }
   .header-sub { display: none; }
 }
+
+/* Homepage service tiles */
+.header-link { color: #d8e3dc; font-size: 0.85rem; text-decoration: underline; }
+.header-link:hover { color: #ffffff; }
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin-top: 26px;
+}
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 14px 20px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  transition: border-color 0.12s ease, transform 0.12s ease;
+  display: block;
+}
+.tile:hover { border-color: var(--brand); transform: translateY(-2px); }
+.tile .t-icon { font-size: 32px; line-height: 1; }
+.tile .t-name { font-weight: 700; margin: 10px 0 2px; }
+.tile .t-count { font-size: 0.8rem; color: var(--muted); min-height: 1.2em; }

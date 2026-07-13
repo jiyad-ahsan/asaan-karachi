@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Full Directory — AsaanKarachi | All Home Service Providers in Karachi</title>
+<meta name="description" content="Browse every provider on AsaanKarachi — electricians, plumbers, AC, solar, generator and appliance repair across Karachi. Filter by area and service." />
+<meta property="og:title" content="Full Directory — AsaanKarachi" />
+<meta property="og:description" content="Electricians, plumbers, AC technicians, generator techs and appliance repair pros across Karachi — rated by your neighbors." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://asaankarachi.pk/directory.html" />
+<link rel="canonical" href="https://asaankarachi.pk/directory.html" />
+<link rel="icon" type="image/svg+xml" href="logo.svg" />
+<script>
+// Set theme before first paint to avoid flash
+(function () {
+  var saved = localStorage.getItem("theme");
+  var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", saved || (prefersDark ? "dark" : "light"));
+})();
+</script>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="index.html"><img class="logo-img" src="logo.svg" alt="" /> AsaanKarachi <span class="tag">Home Services Directory</span></a>
+    <div class="header-right">
+      <div class="header-sub">Serving areas across Karachi</div>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Browse all service providers</h1>
+    <p>Every provider on AsaanKarachi — filter by area and service, search by name, rated by your neighbors.</p>
+  </section>
+
+  <div class="search-bar">
+    <input type="search" id="search-input" placeholder="Search by name or service — e.g. AC repair, generator, plumber…" autocomplete="off" />
+  </div>
+
+  <div class="source-note">Listings are compiled from publicly available sources. Please confirm details directly with the provider before hiring — reviews and verification badges are community-driven.</div>
+
+  <div class="filters">
+    <div class="filter-row">
+      <span class="filter-label">Area</span>
+      <div class="area-combo" id="area-combo">
+        <input type="text" id="area-input" placeholder="All areas — type to search…" autocomplete="off" />
+        <button class="combo-clear" id="area-clear" style="display:none" aria-label="Clear area">✕</button>
+        <div class="combo-list" id="area-list"></div>
+      </div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Service category</span>
+      <div class="chip-group" id="category-chips"></div>
+    </div>
+  </div>
+
+  <div class="results-meta" id="results-meta">Loading listings…</div>
+  <div class="listing-grid" id="listing-grid"></div>
+</main>
+
+<footer class="site-footer">
+  AsaanKarachi — community-rated home services directory for Karachi. Listings compiled from public sources; verify details with providers directly.
+  · <a href="/browse/" style="color:inherit;text-decoration:underline">Browse all services by area</a>
+  · <a href="/get-listed.html" style="color:inherit;text-decoration:underline">List your business</a>
+</footer>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script>
+let allListings = [];
+let activeArea = null;
+let activeCategory = null;
+let searchTerm = "";
+
+document.getElementById("search-input").addEventListener("input", (e) => {
+  searchTerm = e.target.value.trim().toLowerCase();
+  render();
+});
+
+let areasData = [];
+
+async function loadFilters() {
+  const [{ data: areas }, { data: categories }] = await Promise.all([
+    supabaseClient.from("areas").select("id, name, slug").order("name"),
+    supabaseClient.from("categories").select("id, name, slug, icon").order("name"),
+  ]);
+
+  areasData = areas || [];
+  setupAreaCombo();
+
+  const catChips = document.getElementById("category-chips");
+  catChips.innerHTML = "";
+  const allCatChip = document.createElement("div");
+  allCatChip.className = "chip active";
+  allCatChip.textContent = "All categories";
+  allCatChip.onclick = () => { activeCategory = null; refreshChips(); render(); };
+  catChips.appendChild(allCatChip);
+  (categories || []).forEach(c => {
+    const chip = document.createElement("div");
+    chip.className = "chip";
+    chip.textContent = `${c.icon || ""} ${c.name}`.trim();
+    chip.onclick = () => { activeCategory = c.slug; refreshChips(); render(); };
+    chip.dataset.slug = c.slug;
+    catChips.appendChild(chip);
+  });
+}
+
+function refreshChips() {
+  document.querySelectorAll("#category-chips .chip").forEach(el => {
+    const isAll = !el.dataset.slug;
+    el.classList.toggle("active", isAll ? activeCategory === null : el.dataset.slug === activeCategory);
+  });
+}
+
+// --- Searchable area dropdown ---
+function setupAreaCombo() {
+  const input = document.getElementById("area-input");
+  const list = document.getElementById("area-list");
+  const clearBtn = document.getElementById("area-clear");
+
+  function renderList(filter) {
+    const q = (filter || "").toLowerCase();
+    const matches = areasData.filter(a => a.name.toLowerCase().includes(q));
+    let html = `<div class="combo-item all" data-slug="">All areas</div>`;
+    html += matches.map(a => `<div class="combo-item" data-slug="${a.slug}">${escapeHtml(a.name)}</div>`).join("");
+    if (!matches.length) html += `<div class="combo-empty">No areas match "${escapeHtml(filter)}"</div>`;
+    list.innerHTML = html;
+  }
+
+  function selectArea(slug, name) {
+    activeArea = slug || null;
+    input.value = slug ? name : "";
+    clearBtn.style.display = slug ? "block" : "none";
+    list.classList.remove("open");
+    render();
+  }
+
+  input.addEventListener("focus", () => { renderList(""); list.classList.add("open"); input.select(); });
+  input.addEventListener("input", () => {
+    renderList(input.value);
+    list.classList.add("open");
+    if (!input.value.trim() && activeArea) { activeArea = null; clearBtn.style.display = "none"; render(); }
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      const first = list.querySelector(".combo-item:not(.all)") || list.querySelector(".combo-item");
+      if (first) selectArea(first.dataset.slug, first.textContent);
+      e.preventDefault();
+    }
+    if (e.key === "Escape") list.classList.remove("open");
+  });
+  list.addEventListener("click", (e) => {
+    const item = e.target.closest(".combo-item");
+    if (item) selectArea(item.dataset.slug, item.textContent);
+  });
+  clearBtn.addEventListener("click", () => selectArea("", ""));
+  document.addEventListener("click", (e) => {
+    if (!document.getElementById("area-combo").contains(e.target)) list.classList.remove("open");
+  });
+}
+
+async function loadListings() {
+  const { data: listings, error } = await supabaseClient
+    .from("listings")
+    .select(`
+      id, business_name, description, years_experience, contact_phone, contact_whatsapp,
+      google_rating, google_review_count,
+      categories ( name, slug, icon ),
+      listing_areas ( areas ( name, slug ) )
+    `)
+    .eq("status", "active")
+    .order("business_name");
+
+  if (error) {
+    document.getElementById("results-meta").textContent = "Could not load listings. Please refresh.";
+    console.error(error);
+    return;
+  }
+
+  const { data: ratings } = await supabaseClient.from("listing_ratings").select("*");
+  const ratingMap = {};
+  (ratings || []).forEach(r => { ratingMap[r.listing_id] = r; });
+
+  allListings = (listings || []).map(l => ({
+    ...l,
+    areaSlugs: (l.listing_areas || []).map(la => la.areas?.slug).filter(Boolean),
+    areaNames: (l.listing_areas || []).map(la => la.areas?.name).filter(Boolean),
+    avg_rating: ratingMap[l.id]?.avg_rating || 0,
+    review_count: ratingMap[l.id]?.review_count || 0,
+  }));
+
+  render();
+}
+
+function areaTagsHtml(names) {
+  // Citywide providers: one clean tag instead of 16
+  if (names.length >= 10) return `<span class="area-tag">🏙️ All Karachi</span>`;
+  const shown = names.slice(0, 3).map(a => `<span class="area-tag">${escapeHtml(a)}</span>`).join("");
+  const extra = names.length > 3 ? `<span class="area-tag">+${names.length - 3} more</span>` : "";
+  return shown + extra;
+}
+
+function render() {
+  const grid = document.getElementById("listing-grid");
+  const meta = document.getElementById("results-meta");
+
+  let filtered = allListings;
+  if (activeArea) filtered = filtered.filter(l => l.areaSlugs.includes(activeArea));
+  if (activeCategory) filtered = filtered.filter(l => l.categories?.slug === activeCategory);
+  if (searchTerm) {
+    filtered = filtered.filter(l =>
+      (l.business_name || "").toLowerCase().includes(searchTerm) ||
+      (l.description || "").toLowerCase().includes(searchTerm) ||
+      (l.categories?.name || "").toLowerCase().includes(searchTerm)
+    );
+  }
+
+  // Contactable providers first (phone/WhatsApp > website-only > none), then rating, then review count
+  const contactTier = l => (l.contact_phone || l.contact_whatsapp) ? 2
+    : (/\b[a-z0-9-]+\.(com|pk|org|net)\b/i.test(l.description || "") ? 1 : 0);
+  filtered = [...filtered].sort((a, b) =>
+    (contactTier(b) - contactTier(a)) ||
+    (b.avg_rating - a.avg_rating) ||
+    (b.review_count - a.review_count) ||
+    a.business_name.localeCompare(b.business_name)
+  );
+
+  meta.textContent = `${filtered.length} service provider${filtered.length === 1 ? "" : "s"} found`;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div class="empty-state">No listings match these filters yet. Try a different area or category.</div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(l => `
+    <div class="card">
+      <span class="badge">${escapeHtml(l.categories?.icon || "")} ${escapeHtml(l.categories?.name || "")}</span>
+      <h3>${escapeHtml(l.business_name)}</h3>
+      <div class="rating-row">
+        <span class="stars">${starString(l.avg_rating)}</span>
+        <span class="rating-count">${l.avg_rating ? l.avg_rating.toFixed(1) : "No ratings yet"} ${l.review_count ? `(${l.review_count} review${l.review_count === 1 ? "" : "s"})` : ""}</span>
+      </div>
+      ${l.google_rating ? `<div class="rating-row"><span class="rating-count">Google: ★ ${l.google_rating} (${l.google_review_count} reviews)</span></div>` : ""}
+      <p class="card-desc">${escapeHtml(l.description || "")}</p>
+      <div class="area-tags">${areaTagsHtml(l.areaNames)}</div>
+      <div class="card-footer">
+        <span class="meta-line">${l.years_experience ? l.years_experience + " yrs experience" : ""}</span>
+        <div class="card-actions">
+          ${l.contact_phone ? `<a class="btn secondary small" href="tel:${escapeHtml(l.contact_phone)}">📞 Call</a>` : ""}
+          ${l.contact_whatsapp ? `<a class="btn secondary small" href="https://wa.me/92${String(l.contact_whatsapp).replace(/[^0-9]/g, "").replace(/^0/, "")}" target="_blank" rel="noopener">WhatsApp</a>` : ""}
+          <a class="btn small" href="listing.html?id=${l.id}">View profile</a>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function applyUrlParams() {
+  const params = new URLSearchParams(location.search);
+  const q = params.get("q");
+  if (q) {
+    searchTerm = q.trim().toLowerCase();
+    document.getElementById("search-input").value = q;
+  }
+  const cat = params.get("category");
+  if (cat) { activeCategory = cat; refreshChips(); }
+  const areaSlug = params.get("area");
+  if (areaSlug) {
+    const a = areasData.find(x => x.slug === areaSlug);
+    if (a) {
+      activeArea = a.slug;
+      document.getElementById("area-input").value = a.name;
+      document.getElementById("area-clear").style.display = "block";
+    }
+  }
+}
+
+(async () => {
+  await Promise.all([loadFilters(), loadListings()]);
+  applyUrlParams();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -17,8 +17,8 @@ const PLURALS = {
   "electrician": "Electricians",
   "plumber": "Plumbers",
   "ac-hvac-technician": "AC & HVAC Technicians",
-  "generator-technician": "Generator Technicians",
-  "appliance-repair": "Appliance Repair Services",
+  "appliance-generator-repair": "Appliance & Generator Repair Services",
+  "car-mechanic": "Car Mechanics",
   "solar-services": "Solar Companies",
 };
 
